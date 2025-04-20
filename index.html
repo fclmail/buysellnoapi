@@ -1,144 +1,164 @@
 
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Polygon Swap DApp</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: auto;
-      padding: 20px;
-      background-color: #001f3d;
-      color: white;
-    }
-    input, button, select {
-      padding: 12px;
-      width: 100%;
-      margin-top: 10px;
-      border-radius: 8px;
-      border: none;
-      font-size: 16px;
-    }
-    button {
-      background-color: #007bff;
-      color: white;
-    }
-    #status {
-      margin-top: 20px;
-      color: lightgreen;
-    }
-    .error {
-      color: red;
-    }
-    h3 {
-      color: lightblue;
-    }
-  </style>
-</head>
-<body>
-  <h2>Polygon Swap DApp</h2>
-  <button onclick="connectWallet()">Connect Wallet</button>
-  <p><strong>Wallet:</strong> <span id="wallet">Not Connected</span></p>
+<!DOCTYPE html>  
+<html>  
+<head>  
+  <title>Polygon Swap DApp</title>  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>  
+  <style>  
+    body {  
+      font-family: Arial, sans-serif;  
+      max-width: 600px;  
+      margin: auto;  
+      padding: 20px;  
+      background-color: #001f3d;  
+      color: white;  
+    }  
+    input, button, select {  
+      padding: 12px;  
+      width: 100%;  
+      margin-top: 10px;  
+      border-radius: 8px;  
+      border: none;  
+      font-size: 16px;  
+    }  
+    button {  
+      background-color: #007bff;  
+      color: white;  
+    }  
+    #status {  
+      margin-top: 20px;  
+      color: lightgreen;  
+    }  
+    .error {  
+      color: red;  
+    }  
+    h3 {  
+      color: lightblue;  
+    }  
+  </style>  
+</head>  
+<body>  
+  <h2>Polygon Swap DApp</h2>  
+  <button onclick="connectWallet()">Connect Wallet</button>  
+  <p><strong>Wallet:</strong> <span id="wallet">Not Connected</span></p>  
 
-  <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" />
-  <select id="usdcAmount">
-    <option value="0.001">Buy $0.001</option>
-    <option value="1">Buy $1</option>
-    <option value="5">Buy $5</option>
-    <option value="10">Buy $10</option>
-    <option value="50">Buy $50</option>
-    <option value="100">Buy $100</option>
-  </select>
+  <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" />  
+  <select id="usdcAmount">  
+    <option value="0.001">Buy $0.001</option>  
+    <option value="1">Buy $1</option>  
+    <option value="5">Buy $5</option>  
+    <option value="10">Buy $10</option>  
+    <option value="50">Buy $50</option>  
+    <option value="100">Buy $100</option>  
+  </select>  
 
-  <button onclick="buyOnBalancer()">Buy on Balancer → Sell on Sushi</button>
-  <button onclick="buyOnSushi()">Buy on Sushi → Sell on Balancer</button>
+  <button onclick="buyOnBalancer()">Buy on Balancer → Sell on Sushi</button>  
+  <button onclick="buyOnSushi()">Buy on Sushi → Sell on Balancer</button>  
+  <button onclick="testOpenWallet()">Test Open Wallet</button>  
 
-  <h3>Balances</h3>
-  <p>USDC: <span id="usdcBal">-</span></p>
-  <p>Token: <span id="tokenBal">-</span></p>
+  <h3>Balances</h3>  
+  <p>USDC: <span id="usdcBal">-</span></p>  
+  <p>Token: <span id="tokenBal">-</span></p>  
 
-  <h3>Status</h3>
-  <div id="status">Idle</div>
+  <h3>Status</h3>  
+  <div id="status">Idle</div>  
 
-  <script>
-    const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
-    const WMATIC = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";
-    let web3, account;
+  <script>  
+    const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";  
+    const WMATIC = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";  
+    let web3, account;  
 
-    async function connectWallet() {
-      if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
-        try {
-          await ethereum.request({ method: 'eth_requestAccounts' });
-          account = (await web3.eth.getAccounts())[0];
-          document.getElementById('wallet').innerText = account;
-          updateBalances();
-        } catch (err) {
-          setStatus("Wallet connection rejected", true);
-        }
-      } else {
-        window.location.href = "https://metamask.app.link/dapp/" + window.location.href.replace(/^https?:\/\//, '');
-      }
-    }
+    async function connectWallet() {  
+      if (window.ethereum) {  
+        web3 = new Web3(window.ethereum);  
+        try {  
+          await ethereum.request({ method: 'eth_requestAccounts' });  
+          account = (await web3.eth.getAccounts())[0];  
+          document.getElementById('wallet').innerText = account;  
+          updateBalances();  
+          setStatus("Wallet connected successfully");  
+        } catch (err) {  
+          setStatus("Wallet connection rejected", true);  
+        }  
+      } else {  
+        setStatus("Please install MetaMask!", true);  
+      }  
+    }  
 
-    async function updateBalances() {
-      const usdcBal = await getERC20Balance(USDC);
-      document.getElementById("usdcBal").innerText = usdcBal;
+    async function updateBalances() {  
+      const usdcBal = await getERC20Balance(USDC);  
+      document.getElementById("usdcBal").innerText = usdcBal;  
 
-      const token = document.getElementById("tokenAddress").value || WMATIC;
-      const tokBal = await getERC20Balance(token);
-      document.getElementById("tokenBal").innerText = tokBal;
-    }
+      const token = document.getElementById("tokenAddress").value || WMATIC;  
+      const tokBal = await getERC20Balance(token);  
+      document.getElementById("tokenBal").innerText = tokBal;  
+    }  
 
-    async function getERC20Balance(token) {
-      const abi = [{ constant: true, inputs: [{ name: "_owner", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], type: "function" }];
-      const decimalsAbi = [{ constant: true, inputs: [], name: "decimals", outputs: [{ name: "", type: "uint8" }], type: "function" }];
-      const contract = new web3.eth.Contract(abi, token);
-      const decimalsContract = new web3.eth.Contract(decimalsAbi, token);
-      const raw = await contract.methods.balanceOf(account).call();
-      const decimals = await decimalsContract.methods.decimals().call();
-      return (raw / 10 ** decimals).toFixed(4);
-    }
+    async function getERC20Balance(token) {  
+      const abi = [{ constant: true, inputs: [{ name: "_owner", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], type: "function" }];  
+      const decimalsAbi = [{ constant: true, inputs: [], name: "decimals", outputs: [{ name: "", type: "uint8" }], type: "function" }];  
+      const contract = new web3.eth.Contract(abi, token);  
+      const decimalsContract = new web3.eth.Contract(decimalsAbi, token);  
+      const raw = await contract.methods.balanceOf(account).call();  
+      const decimals = await decimalsContract.methods.decimals().call();  
+      return (raw / 10 ** decimals).toFixed(4);  
+    }  
 
-    async function buyOnBalancer() {
-      const token = document.getElementById("tokenAddress").value;
-      const amount = document.getElementById("usdcAmount").value;
-      if (!token) return setStatus("Enter a token address", true);
-      setStatus(`Mock: Buying ${amount} USDC of token on Balancer...`);
+    async function buyOnBalancer() {  
+      const token = document.getElementById("tokenAddress").value;  
+      const amount = document.getElementById("usdcAmount").value;  
+      if (!token) return setStatus("Enter a token address", true);  
+      setStatus(`Mock: Buying ${amount} USDC of token on Balancer...`);  
       
-      setTimeout(() => {
-        setStatus("Now selling on SushiSwap...");
-        sellToken(token);
-      }, 2000);
-    }
+      setTimeout(() => {  
+        setStatus("Now selling on SushiSwap...");  
+        sellToken(token);  
+      }, 2000);  
+    }  
 
-    async function buyOnSushi() {
-      const token = document.getElementById("tokenAddress").value;
-      const amount = document.getElementById("usdcAmount").value;
-      if (!token) return setStatus("Enter a token address", true);
-      setStatus(`Mock: Buying ${amount} USDC of token on SushiSwap...`);
+    async function buyOnSushi() {  
+      const token = document.getElementById("tokenAddress").value;  
+      const amount = document.getElementById("usdcAmount").value;  
+      if (!token) return setStatus("Enter a token address", true);  
+      setStatus(`Mock: Buying ${amount} USDC of token on SushiSwap...`);  
 
-      setTimeout(() => {
-        setStatus("Now selling on Balancer...");
-        sellToken(token);
-      }, 2000);
-    }
+      setTimeout(() => {  
+        setStatus("Now selling on Balancer...");  
+        sellToken(token);  
+      }, 2000);  
+    }  
 
-    async function sellToken(token) {
-      setTimeout(() => {
-        setStatus(`Mock: Selling token ${token}`);
-        updateBalances();
-      }, 2000);
-    }
+    async function sellToken(token) {  
+      setTimeout(() => {  
+        setStatus(`Mock: Selling token ${token}`);  
+        updateBalances();  
+      }, 2000);  
+    }  
 
-    function setStatus(msg, isError = false) {
-      const el = document.getElementById("status");
-      el.innerText = msg;
-      el.className = isError ? "error" : "";
-    }
-  </script>
-</body>
+    function testOpenWallet() {  
+      if (window.ethereum) {  
+        window.ethereum.request({ method: 'eth_accounts' })  
+          .then(accounts => {  
+            if (accounts.length > 0) {  
+              setStatus("Wallet is open and connected.");  
+            } else {  
+              setStatus("Wallet is closed or not connected.", true);  
+            }  
+          })  
+          .catch(err => {  
+            setStatus("Error accessing wallet: " + err.message, true);  
+          });  
+      } else {  
+        setStatus("Please install MetaMask!", true);  
+      }  
+    }  
+
+    function setStatus(msg, isError = false) {  
+      const el = document.getElementById("status");  
+      el.innerText = msg;  
+      el.className = isError ? "error" : "";  
+    }  
+  </script>  
+</body>  
 </html>
