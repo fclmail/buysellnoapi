@@ -1,204 +1,144 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DEX Arbitrage</title>
-  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+  <title>Polygon Swap DApp</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <style>
     body {
-      background-color: #0b1e3f;
-      color: #fff;
       font-family: Arial, sans-serif;
-      margin: 0;
+      max-width: 600px;
+      margin: auto;
       padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      background-color: #001f3d;
+      color: white;
     }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    input, button {
-      width: 90%;
-      max-width: 400px;
+    input, button, select {
       padding: 12px;
-      margin: 8px 0;
-      font-size: 16px;
-      border: none;
+      width: 100%;
+      margin-top: 10px;
       border-radius: 8px;
-      box-sizing: border-box;
-    }
-    input {
-      background-color: #fff;
-      color: #000;
+      border: none;
+      font-size: 16px;
     }
     button {
-      background-color: #1e88e5;
+      background-color: #007bff;
       color: white;
-      cursor: pointer;
     }
-    button:hover {
-      background-color: #1565c0;
+    #status {
+      margin-top: 20px;
+      color: lightgreen;
     }
-    .section {
-      width: 100%;
-      max-width: 420px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    .error {
+      color: red;
     }
-    #walletAddress, #usdcBalance {
-      font-weight: bold;
-      margin: 6px 0;
+    h3 {
+      color: lightblue;
     }
   </style>
 </head>
 <body>
-  <h1>Polygon DEX Arbitrage</h1>
+  <h2>Polygon Swap DApp</h2>
+  <button onclick="connectWallet()">Connect Wallet</button>
+  <p><strong>Wallet:</strong> <span id="wallet">Not Connected</span></p>
 
-  <div class="section">
-    <button onclick="connectWallet()">🔌 Connect Wallet</button>
-    <p id="walletAddress">Wallet: Not Connected</p>
-    <p id="usdcBalance">USDC Balance: 0</p>
+  <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" />
+  <select id="usdcAmount">
+    <option value="0.001">Buy $0.001</option>
+    <option value="1">Buy $1</option>
+    <option value="5">Buy $5</option>
+    <option value="10">Buy $10</option>
+    <option value="50">Buy $50</option>
+    <option value="100">Buy $100</option>
+  </select>
 
-    <input id="tokenAddress" placeholder="Enter ERC-20 Token Address (Polygon)" />
-    <input id="amountIn" placeholder="Amount of USDC to Use" />
+  <button onclick="buyOnBalancer()">Buy on Balancer → Sell on Sushi</button>
+  <button onclick="buyOnSushi()">Buy on Sushi → Sell on Balancer</button>
 
-    <button onclick="buyBalancerSellSushi()">Buy on Balancer → Sell on Sushi</button>
-    <button onclick="buySushiSellBalancer()">Buy on Sushi → Sell on Balancer</button>
-    <button onclick="testFunction()">🧪 Test Wallet Connection</button>
-  </div>
+  <h3>Balances</h3>
+  <p>USDC: <span id="usdcBal">-</span></p>
+  <p>Token: <span id="tokenBal">-</span></p>
+
+  <h3>Status</h3>
+  <div id="status">Idle</div>
 
   <script>
-    let provider, signer, userAddress;
-
-    const usdcAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // USDC on Polygon
-    const sushiRouterAddress = "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506"; // SushiSwap Router
-    const balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"; // Balancer Vault
-
-    const erc20Abi = [
-      "function balanceOf(address) view returns (uint)",
-      "function approve(address spender, uint amount) returns (bool)",
-      "function allowance(address owner, address spender) view returns (uint)",
-      "function decimals() view returns (uint8)"
-    ];
-
-    const sushiRouterAbi = [
-      "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)"
-    ];
+    const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+    const WMATIC = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";
+    let web3, account;
 
     async function connectWallet() {
-      if (typeof window.ethereum !== 'undefined') {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
         try {
-          provider = new ethers.providers.Web3Provider(window.ethereum, "any");
-          await provider.send("eth_requestAccounts", []);
-          signer = provider.getSigner();
-          userAddress = await signer.getAddress();
-          document.getElementById("walletAddress").innerText = `Wallet: ${userAddress}`;
-          getUSDCBalance();
+          await ethereum.request({ method: 'eth_requestAccounts' });
+          account = (await web3.eth.getAccounts())[0];
+          document.getElementById('wallet').innerText = account;
+          updateBalances();
         } catch (err) {
-          console.error("User rejected connection", err);
-          alert("Wallet connection failed.");
+          setStatus("Wallet connection rejected", true);
         }
       } else {
-        // MetaMask deep link fallback for mobile
-        const dappUrl = window.location.href.replace(/^https?:\/\//, '');
-        const metamaskLink = `https://metamask.app.link/dapp/${dappUrl}`;
-        window.location.href = metamaskLink;
+        window.location.href = "https://metamask.app.link/dapp/" + window.location.href.replace(/^https?:\/\//, '');
       }
     }
 
-    async function getUSDCBalance() {
-      if (!provider || !userAddress) return;
-      const usdc = new ethers.Contract(usdcAddress, erc20Abi, provider);
-      const balance = await usdc.balanceOf(userAddress);
-      const decimals = await usdc.decimals();
-      const formatted = ethers.utils.formatUnits(balance, decimals);
-      document.getElementById("usdcBalance").innerText = `USDC Balance: ${formatted}`;
+    async function updateBalances() {
+      const usdcBal = await getERC20Balance(USDC);
+      document.getElementById("usdcBal").innerText = usdcBal;
+
+      const token = document.getElementById("tokenAddress").value || WMATIC;
+      const tokBal = await getERC20Balance(token);
+      document.getElementById("tokenBal").innerText = tokBal;
     }
 
-    async function approveIfNeeded(token, spender, amount) {
-      const contract = new ethers.Contract(token, erc20Abi, signer);
-      const allowance = await contract.allowance(userAddress, spender);
-      if (allowance.lt(amount)) {
-        const tx = await contract.approve(spender, amount);
-        await tx.wait();
-      }
+    async function getERC20Balance(token) {
+      const abi = [{ constant: true, inputs: [{ name: "_owner", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], type: "function" }];
+      const decimalsAbi = [{ constant: true, inputs: [], name: "decimals", outputs: [{ name: "", type: "uint8" }], type: "function" }];
+      const contract = new web3.eth.Contract(abi, token);
+      const decimalsContract = new web3.eth.Contract(decimalsAbi, token);
+      const raw = await contract.methods.balanceOf(account).call();
+      const decimals = await decimalsContract.methods.decimals().call();
+      return (raw / 10 ** decimals).toFixed(4);
     }
 
-    async function buyBalancerSellSushi() {
+    async function buyOnBalancer() {
       const token = document.getElementById("tokenAddress").value;
-      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6);
-
-      if (!signer || !token || amount.lte(0)) return alert("Missing input");
-
-      await approveIfNeeded(usdcAddress, balancerVaultAddress, amount);
-      alert("✅ Simulated: Buy token on Balancer");
-
-      await approveIfNeeded(token, sushiRouterAddress, amount);
-      const sushi = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
-      const path = [token, usdcAddress];
-      const deadline = Math.floor(Date.now() / 1000) + 600;
-
-      try {
-        const tx = await sushi.swapExactTokensForTokens(
-          amount,
-          0,
-          path,
-          userAddress,
-          deadline
-        );
-        await tx.wait();
-        alert("✅ Token sold on Sushi");
-        getUSDCBalance();
-      } catch (err) {
-        console.error(err);
-        alert("❌ Sushi sell failed");
-      }
+      const amount = document.getElementById("usdcAmount").value;
+      if (!token) return setStatus("Enter a token address", true);
+      setStatus(`Mock: Buying ${amount} USDC of token on Balancer...`);
+      
+      setTimeout(() => {
+        setStatus("Now selling on SushiSwap...");
+        sellToken(token);
+      }, 2000);
     }
 
-    async function buySushiSellBalancer() {
+    async function buyOnSushi() {
       const token = document.getElementById("tokenAddress").value;
-      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6);
+      const amount = document.getElementById("usdcAmount").value;
+      if (!token) return setStatus("Enter a token address", true);
+      setStatus(`Mock: Buying ${amount} USDC of token on SushiSwap...`);
 
-      if (!signer || !token || amount.lte(0)) return alert("Missing input");
-
-      await approveIfNeeded(usdcAddress, sushiRouterAddress, amount);
-      const sushi = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
-      const path = [usdcAddress, token];
-      const deadline = Math.floor(Date.now() / 1000) + 600;
-
-      try {
-        const tx = await sushi.swapExactTokensForTokens(
-          amount,
-          0,
-          path,
-          userAddress,
-          deadline
-        );
-        await tx.wait();
-        alert("✅ Token bought on Sushi");
-      } catch (err) {
-        console.error(err);
-        alert("❌ Sushi buy failed");
-        return;
-      }
-
-      alert("✅ Simulated: Sell token on Balancer");
-      getUSDCBalance();
+      setTimeout(() => {
+        setStatus("Now selling on Balancer...");
+        sellToken(token);
+      }, 2000);
     }
 
-    async function testFunction() {
-      if (!signer) {
-        alert("Wallet not connected.");
-      } else {
-        const address = await signer.getAddress();
-        alert("Wallet Connected: " + address);
-      }
+    async function sellToken(token) {
+      setTimeout(() => {
+        setStatus(`Mock: Selling token ${token}`);
+        updateBalances();
+      }, 2000);
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById("status");
+      el.innerText = msg;
+      el.className = isError ? "error" : "";
     }
   </script>
 </body>
 </html>
-
