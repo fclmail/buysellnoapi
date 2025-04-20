@@ -1,20 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Balancer ↔ Sushi Arbitrage</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DEX Arbitrage</title>
   <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
   <style>
     body {
       background-color: #0b1e3f;
-      color: white;
-      font-family: Arial, sans-serif;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
       padding: 20px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
     input, button {
-      padding: 10px;
-      margin: 5px;
+      width: 90%;
+      max-width: 400px;
+      padding: 12px;
+      margin: 8px 0;
       font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    input {
+      background-color: #fff;
+      color: #000;
+    }
+
+    button {
+      background-color: #1e88e5;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #1565c0;
+    }
+
+    #walletAddress, #usdcBalance {
+      margin: 5px 0;
+      font-weight: bold;
+    }
+
+    .section {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
   </style>
 </head>
@@ -22,27 +66,25 @@
 
   <h1>Polygon DEX Arbitrage</h1>
 
-  <button onclick="connectWallet()">🔌 Connect Wallet</button>
-  <p id="walletAddress">Wallet: Not Connected</p>
-  <p id="usdcBalance">USDC Balance: 0</p>
+  <div class="section">
+    <button onclick="connectWallet()">🔌 Connect Wallet</button>
+    <p id="walletAddress">Wallet: Not Connected</p>
+    <p id="usdcBalance">USDC Balance: 0</p>
 
-  <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" size="45" />
-  <input id="amountIn" placeholder="Amount of USDC to Use" />
+    <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" />
+    <input id="amountIn" placeholder="Amount of USDC to Use" />
 
-  <br>
-
-  <button onclick="buyBalancerSellSushi()">Buy on Balancer → Sell on Sushi</button>
-  <button onclick="buySushiSellBalancer()">Buy on Sushi → Sell on Balancer</button>
-
-  <br><br>
-  <button onclick="testFunction()">🧪 Test Wallet Connection</button>
+    <button onclick="buyBalancerSellSushi()">Buy on Balancer → Sell on Sushi</button>
+    <button onclick="buySushiSellBalancer()">Buy on Sushi → Sell on Balancer</button>
+    <button onclick="testFunction()">🧪 Test Wallet Connection</button>
+  </div>
 
   <script>
     let provider, signer, userAddress;
 
     const usdcAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // USDC on Polygon
-    const sushiRouterAddress = "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506"; // SushiSwap Router
-    const balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"; // Balancer Vault
+    const sushiRouterAddress = "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506"; // SushiSwap
+    const balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"; // Balancer
 
     const erc20Abi = [
       "function balanceOf(address) view returns (uint)",
@@ -60,12 +102,24 @@
     ];
 
     async function connectWallet() {
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
-      userAddress = await signer.getAddress();
-      document.getElementById("walletAddress").innerText = `Wallet: ${userAddress}`;
-      getUSDCBalance();
+      if (typeof window.ethereum !== 'undefined') {
+        try {
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          signer = provider.getSigner();
+          userAddress = await signer.getAddress();
+          document.getElementById("walletAddress").innerText = `Wallet: ${userAddress}`;
+          getUSDCBalance();
+        } catch (err) {
+          console.error("Connection rejected:", err);
+          alert("Wallet connection failed.");
+        }
+      } else {
+        // MetaMask not installed: use mobile deep link
+        const dappUrl = window.location.href.replace(/^https?:\/\//, '');
+        const metamaskDeepLink = `https://metamask.app.link/dapp/${dappUrl}`;
+        window.location.href = metamaskDeepLink;
+      }
     }
 
     async function getUSDCBalance() {
@@ -91,15 +145,15 @@
 
       await approveIfNeeded(usdcAddress, balancerVaultAddress, amount);
 
-      // 🔁 FAKE BALANCER swap - placeholder for working interaction
-      alert("Balancer buy simulated (you would call the Balancer Vault contract here)");
+      // Simulated Balancer buy
+      alert("Simulating: Buy on Balancer");
 
-      // Now approve token for selling on Sushi
+      // Then approve for Sushi and sell
       await approveIfNeeded(tokenAddress, sushiRouterAddress, amount);
-
       const sushiRouter = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
       const path = [tokenAddress, usdcAddress];
       const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+
       try {
         const tx = await sushiRouter.swapExactTokensForTokens(
           amount,
@@ -122,7 +176,6 @@
       const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6); // USDC decimals
 
       await approveIfNeeded(usdcAddress, sushiRouterAddress, amount);
-
       const sushiRouter = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
       const path = [usdcAddress, tokenAddress];
       const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
@@ -143,8 +196,8 @@
         return;
       }
 
-      // 🔁 FAKE BALANCER sell - placeholder
-      alert("Balancer sell simulated (you would call the Balancer Vault here)");
+      // Simulated Balancer sell
+      alert("Simulating: Sell on Balancer");
       getUSDCBalance();
     }
 
@@ -157,6 +210,6 @@
       alert("Connected wallet: " + address);
     }
   </script>
-
 </body>
 </html>
+
