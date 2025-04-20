@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Balancer ↔ Sushi Arbitrage</title>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+  <style>
+    body {
+      background-color: #0b1e3f;
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    input, button {
+      padding: 10px;
+      margin: 5px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Polygon DEX Arbitrage</h1>
+
+  <button onclick="connectWallet()">🔌 Connect Wallet</button>
+  <p id="walletAddress">Wallet: Not Connected</p>
+  <p id="usdcBalance">USDC Balance: 0</p>
+
+  <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" size="45" />
+  <input id="amountIn" placeholder="Amount of USDC to Use" />
+
+  <br>
+
+  <button onclick="buyBalancerSellSushi()">Buy on Balancer → Sell on Sushi</button>
+  <button onclick="buySushiSellBalancer()">Buy on Sushi → Sell on Balancer</button>
+
+  <br><br>
+  <button onclick="testFunction()">🧪 Test Wallet Connection</button>
+
+  <script>
+    let provider, signer, userAddress;
+
+    const usdcAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // USDC on Polygon
+    const sushiRouterAddress = "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506"; // SushiSwap Router
+    const balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"; // Balancer Vault
+
+    const erc20Abi = [
+      "function balanceOf(address) view returns (uint)",
+      "function approve(address spender, uint amount) returns (bool)",
+      "function allowance(address owner, address spender) view returns (uint)",
+      "function decimals() view returns (uint8)"
+    ];
+
+    const sushiRouterAbi = [
+      "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)"
+    ];
+
+    const balancerAbi = [
+      "function swap(tuple(bytes32 poolId, uint8 kind, address assetIn, address assetOut, uint256 amount, bytes userData), tuple(address sender, bool fromInternalBalance, address recipient, bool toInternalBalance), uint256 limit, uint256 deadline) external returns (uint256)"
+    ];
+
+    async function connectWallet() {
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+      userAddress = await signer.getAddress();
+      document.getElementById("walletAddress").innerText = `Wallet: ${userAddress}`;
+      getUSDCBalance();
+    }
+
+    async function getUSDCBalance() {
+      const usdc = new ethers.Contract(usdcAddress, erc20Abi, provider);
+      const balance = await usdc.balanceOf(userAddress);
+      const decimals = await usdc.decimals();
+      const formatted = ethers.utils.formatUnits(balance, decimals);
+      document.getElementById("usdcBalance").innerText = `USDC Balance: ${formatted}`;
+    }
+
+    async function approveIfNeeded(token, spender, amount) {
+      const contract = new ethers.Contract(token, erc20Abi, signer);
+      const allowance = await contract.allowance(userAddress, spender);
+      if (allowance.lt(amount)) {
+        const tx = await contract.approve(spender, amount);
+        await tx.wait();
+      }
+    }
+
+    async function buyBalancerSellSushi() {
+      const tokenAddress = document.getElementById("tokenAddress").value;
+      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6); // USDC has 6 decimals
+
+      await approveIfNeeded(usdcAddress, balancerVaultAddress, amount);
+
+      // 🔁 FAKE BALANCER swap - placeholder for working interaction
+      alert("Balancer buy simulated (you would call the Balancer Vault contract here)");
+
+      // Now approve token for selling on Sushi
+      await approveIfNeeded(tokenAddress, sushiRouterAddress, amount);
+
+      const sushiRouter = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
+      const path = [tokenAddress, usdcAddress];
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+      try {
+        const tx = await sushiRouter.swapExactTokensForTokens(
+          amount,
+          0,
+          path,
+          userAddress,
+          deadline
+        );
+        await tx.wait();
+        alert("Token sold on Sushi");
+        getUSDCBalance();
+      } catch (err) {
+        console.error(err);
+        alert("Sushi sell failed");
+      }
+    }
+
+    async function buySushiSellBalancer() {
+      const tokenAddress = document.getElementById("tokenAddress").value;
+      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6); // USDC decimals
+
+      await approveIfNeeded(usdcAddress, sushiRouterAddress, amount);
+
+      const sushiRouter = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
+      const path = [usdcAddress, tokenAddress];
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+
+      try {
+        const tx = await sushiRouter.swapExactTokensForTokens(
+          amount,
+          0,
+          path,
+          userAddress,
+          deadline
+        );
+        await tx.wait();
+        alert("Token bought on Sushi");
+      } catch (err) {
+        console.error(err);
+        alert("Sushi buy failed");
+        return;
+      }
+
+      // 🔁 FAKE BALANCER sell - placeholder
+      alert("Balancer sell simulated (you would call the Balancer Vault here)");
+      getUSDCBalance();
+    }
+
+    async function testFunction() {
+      if (!signer) {
+        alert("Wallet not connected.");
+        return;
+      }
+      const address = await signer.getAddress();
+      alert("Connected wallet: " + address);
+    }
+  </script>
+
+</body>
+</html>
