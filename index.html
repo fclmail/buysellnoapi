@@ -9,19 +9,17 @@
     body {
       background-color: #0b1e3f;
       color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-      padding: 20px;
+      font-family: Arial, sans-serif;
       margin: 0;
+      padding: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-
     h1 {
       text-align: center;
       margin-bottom: 20px;
     }
-
     input, button {
       width: 90%;
       max-width: 400px;
@@ -32,27 +30,18 @@
       border-radius: 8px;
       box-sizing: border-box;
     }
-
     input {
       background-color: #fff;
       color: #000;
     }
-
     button {
       background-color: #1e88e5;
       color: white;
       cursor: pointer;
     }
-
     button:hover {
       background-color: #1565c0;
     }
-
-    #walletAddress, #usdcBalance {
-      margin: 5px 0;
-      font-weight: bold;
-    }
-
     .section {
       width: 100%;
       max-width: 420px;
@@ -60,10 +49,13 @@
       flex-direction: column;
       align-items: center;
     }
+    #walletAddress, #usdcBalance {
+      font-weight: bold;
+      margin: 6px 0;
+    }
   </style>
 </head>
 <body>
-
   <h1>Polygon DEX Arbitrage</h1>
 
   <div class="section">
@@ -71,7 +63,7 @@
     <p id="walletAddress">Wallet: Not Connected</p>
     <p id="usdcBalance">USDC Balance: 0</p>
 
-    <input id="tokenAddress" placeholder="Enter ERC-20 Token Address" />
+    <input id="tokenAddress" placeholder="Enter ERC-20 Token Address (Polygon)" />
     <input id="amountIn" placeholder="Amount of USDC to Use" />
 
     <button onclick="buyBalancerSellSushi()">Buy on Balancer → Sell on Sushi</button>
@@ -83,8 +75,8 @@
     let provider, signer, userAddress;
 
     const usdcAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // USDC on Polygon
-    const sushiRouterAddress = "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506"; // SushiSwap
-    const balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"; // Balancer
+    const sushiRouterAddress = "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506"; // SushiSwap Router
+    const balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"; // Balancer Vault
 
     const erc20Abi = [
       "function balanceOf(address) view returns (uint)",
@@ -97,32 +89,29 @@
       "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)"
     ];
 
-    const balancerAbi = [
-      "function swap(tuple(bytes32 poolId, uint8 kind, address assetIn, address assetOut, uint256 amount, bytes userData), tuple(address sender, bool fromInternalBalance, address recipient, bool toInternalBalance), uint256 limit, uint256 deadline) external returns (uint256)"
-    ];
-
     async function connectWallet() {
       if (typeof window.ethereum !== 'undefined') {
         try {
-          provider = new ethers.providers.Web3Provider(window.ethereum);
+          provider = new ethers.providers.Web3Provider(window.ethereum, "any");
           await provider.send("eth_requestAccounts", []);
           signer = provider.getSigner();
           userAddress = await signer.getAddress();
           document.getElementById("walletAddress").innerText = `Wallet: ${userAddress}`;
           getUSDCBalance();
         } catch (err) {
-          console.error("Connection rejected:", err);
+          console.error("User rejected connection", err);
           alert("Wallet connection failed.");
         }
       } else {
-        // MetaMask not installed: use mobile deep link
+        // MetaMask deep link fallback for mobile
         const dappUrl = window.location.href.replace(/^https?:\/\//, '');
-        const metamaskDeepLink = `https://metamask.app.link/dapp/${dappUrl}`;
-        window.location.href = metamaskDeepLink;
+        const metamaskLink = `https://metamask.app.link/dapp/${dappUrl}`;
+        window.location.href = metamaskLink;
       }
     }
 
     async function getUSDCBalance() {
+      if (!provider || !userAddress) return;
       const usdc = new ethers.Contract(usdcAddress, erc20Abi, provider);
       const balance = await usdc.balanceOf(userAddress);
       const decimals = await usdc.decimals();
@@ -140,22 +129,21 @@
     }
 
     async function buyBalancerSellSushi() {
-      const tokenAddress = document.getElementById("tokenAddress").value;
-      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6); // USDC has 6 decimals
+      const token = document.getElementById("tokenAddress").value;
+      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6);
+
+      if (!signer || !token || amount.lte(0)) return alert("Missing input");
 
       await approveIfNeeded(usdcAddress, balancerVaultAddress, amount);
+      alert("✅ Simulated: Buy token on Balancer");
 
-      // Simulated Balancer buy
-      alert("Simulating: Buy on Balancer");
-
-      // Then approve for Sushi and sell
-      await approveIfNeeded(tokenAddress, sushiRouterAddress, amount);
-      const sushiRouter = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
-      const path = [tokenAddress, usdcAddress];
-      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+      await approveIfNeeded(token, sushiRouterAddress, amount);
+      const sushi = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
+      const path = [token, usdcAddress];
+      const deadline = Math.floor(Date.now() / 1000) + 600;
 
       try {
-        const tx = await sushiRouter.swapExactTokensForTokens(
+        const tx = await sushi.swapExactTokensForTokens(
           amount,
           0,
           path,
@@ -163,25 +151,27 @@
           deadline
         );
         await tx.wait();
-        alert("Token sold on Sushi");
+        alert("✅ Token sold on Sushi");
         getUSDCBalance();
       } catch (err) {
         console.error(err);
-        alert("Sushi sell failed");
+        alert("❌ Sushi sell failed");
       }
     }
 
     async function buySushiSellBalancer() {
-      const tokenAddress = document.getElementById("tokenAddress").value;
-      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6); // USDC decimals
+      const token = document.getElementById("tokenAddress").value;
+      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 6);
+
+      if (!signer || !token || amount.lte(0)) return alert("Missing input");
 
       await approveIfNeeded(usdcAddress, sushiRouterAddress, amount);
-      const sushiRouter = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
-      const path = [usdcAddress, tokenAddress];
-      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+      const sushi = new ethers.Contract(sushiRouterAddress, sushiRouterAbi, signer);
+      const path = [usdcAddress, token];
+      const deadline = Math.floor(Date.now() / 1000) + 600;
 
       try {
-        const tx = await sushiRouter.swapExactTokensForTokens(
+        const tx = await sushi.swapExactTokensForTokens(
           amount,
           0,
           path,
@@ -189,25 +179,24 @@
           deadline
         );
         await tx.wait();
-        alert("Token bought on Sushi");
+        alert("✅ Token bought on Sushi");
       } catch (err) {
         console.error(err);
-        alert("Sushi buy failed");
+        alert("❌ Sushi buy failed");
         return;
       }
 
-      // Simulated Balancer sell
-      alert("Simulating: Sell on Balancer");
+      alert("✅ Simulated: Sell token on Balancer");
       getUSDCBalance();
     }
 
     async function testFunction() {
       if (!signer) {
         alert("Wallet not connected.");
-        return;
+      } else {
+        const address = await signer.getAddress();
+        alert("Wallet Connected: " + address);
       }
-      const address = await signer.getAddress();
-      alert("Connected wallet: " + address);
     }
   </script>
 </body>
